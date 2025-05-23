@@ -29,10 +29,9 @@ from utils import set_random_seed, str2bool
 
 #%%
 def concept_shift(args):
-    transform = 'logit'
     top_j = 0
-    base_model = 'bm25'
-    base_model = 'ance'
+    transform = 'logit'
+    base_model = 'bm25' # in ['bm25', 'ance']
 
     # dataset_name = "DL2020"
     dataset_list = ['msmarcotrain', 'msmarcodev', 'DL2019', 'DL2020', 'DLHard']
@@ -127,7 +126,6 @@ def prop_chi2_test(ar_array_train, ar_array):
     return chi2, pval
 
 
-
 def youden_f1_thres(pr, ar, roc_curve_bool=True):
     ''' ROC curve '''
     # Convert tensors to NumPy arrays for sklearn compatibility
@@ -169,8 +167,8 @@ def youden_f1_thres(pr, ar, roc_curve_bool=True):
         # Calculate AUC and ROC curve for each column
         precision, recall, thresholds = precision_recall_curve(ar_np[:, i], pr_np[:, i])
         # thresholds.shape
-        f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)  # F1-score 계산
-        f1_threshold = thresholds[f1_scores.argmax()]  # F1-score 최대 threshold 선택
+        f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)
+        f1_threshold = thresholds[f1_scores.argmax()]
         f1_threshold_array[i] = f1_threshold
         
         # print(f"Column {i} f1 threshold : {f1_threshold:.3f}")
@@ -198,11 +196,11 @@ def youden_f1_thres(pr, ar, roc_curve_bool=True):
 
 def find_f1_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, resolution=500):
 
-    # Gaussian 정규분포 추정
+    # Gaussian
     mu_0, std_0 = np.mean(pr_0), np.std(pr_0)
     mu_1, std_1 = np.mean(pr_1), np.std(pr_1)
 
-    # x 축 범위
+    # x axis
     if x_range is None:
         # x_min = -20
         # x_max = 20
@@ -214,7 +212,6 @@ def find_f1_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, resolut
     x_vals = np.linspace(x_min, x_max, resolution)
 
     if gaussian:
-        # 정규분포 PDF 계산
         pdf_0 = (1 - prop_rel) * norm.pdf(x_vals, loc=mu_0, scale=std_0)
         pdf_1 = prop_rel * norm.pdf(x_vals, loc=mu_1, scale=std_1)
 
@@ -244,7 +241,7 @@ def find_f1_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, resolut
         FN = prop_rel * norm.cdf(thresholds, loc=mu_1, scale=std_1)
     
     else:
-        # KDE 계산
+        # KDE
         kde_0 = gaussian_kde(pr_0)
         kde_1 = gaussian_kde(pr_1)
 
@@ -293,11 +290,9 @@ def find_f1_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, resolut
 
 
 def find_error_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, resolution=500):
-    # Gaussian 정규분포 추정
     mu_0, std_0 = np.mean(pr_0), np.std(pr_0)
     mu_1, std_1 = np.mean(pr_1), np.std(pr_1)
 
-    # x 축 범위
     if x_range is None:
         x_min = min(mu_0 - 4 * std_0, mu_1 - 4 * std_1)
         x_max = max(mu_0 + 4 * std_0, mu_1 + 4 * std_1)
@@ -310,19 +305,15 @@ def find_error_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, reso
     thresholds = []
 
     if gaussian:
-        # 정규분포 PDF 계산
         pdf_0 = (1 - prop_rel) * norm.pdf(x_vals, loc=mu_0, scale=std_0)
         pdf_1 = prop_rel * norm.pdf(x_vals, loc=mu_1, scale=std_1)
         
-        # 로그 prior + 스케일링
         delta = np.log(((1-prop_rel) * std_1) / (prop_rel * std_0))
 
-        # 계수
         A = 1 / (2 * std_0**2) - 1 / (2 * std_1**2)
         B = -(mu_0 / std_0**2 - mu_1 / std_1**2)
         C = (mu_0**2) / (2 * std_0**2) - (mu_1**2) / (2 * std_1**2) - delta
 
-        # 판별식
         D = B**2 - 4 * A * C
         sqrt_D = np.sqrt(D)
         tau_1 = (-B - sqrt_D) / (2 * A)
@@ -341,7 +332,7 @@ def find_error_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, reso
         FN = prop_rel * norm.cdf(thresholds, loc=mu_1, scale=std_1)
     
     else:
-        # KDE 계산
+        # KDE
         kde_0 = gaussian_kde(pr_0)
         kde_1 = gaussian_kde(pr_1)
 
@@ -357,7 +348,6 @@ def find_error_threshold(pr_0, pr_1, prop_rel, gaussian=True, x_range=None, reso
                 t = brentq(lambda x: prop_rel * kde_1(x) - (1 - prop_rel) * kde_0(x),
                         x_vals[i], x_vals[i + 1])
             
-                # eps=0.01 보다 큰 pdf 값을 갖는 교점만 threshold로 채택
                 if prop_rel * kde_1(t) > 0.01:
                     thresholds.append(t)
 
@@ -394,7 +384,6 @@ def bayes_threshold(pr, ar, transform='logit', loss='error', gaussian=True, pool
     # calculate bayes threshold
     best_thresh_list = []
     for top_j in range(10):
-        # print(f'top_{top_j+1} 번째 문서.')
         if top_j >= 10 - pool:
             pr_array = np.array(pr[:, top_j:]).reshape(-1)
             ar_array = np.array(ar[:, top_j:]).reshape(-1)
@@ -437,7 +426,6 @@ def bayes_threshold(pr, ar, transform='logit', loss='error', gaussian=True, pool
     return bayes_threshold_array
 
 
-
 def generate_thres(args, base_model, dataset_name, split_id=1):
     dict_embed, args_infer = load_QPP_output(args, dataset_name, base_model = base_model, split_id=split_id)
 
@@ -475,24 +463,12 @@ def generate_thres(args, base_model, dataset_name, split_id=1):
     torch.save(torch.median(pr, axis=0)[0], os.path.abspath(f"{thres_dir}median_thres.pkl"))
     torch.save(torch.quantile(pr, quantile, axis=0), os.path.abspath(f"{thres_dir}quantile_thres.pkl"))  # [3, top_k]
 
-    
     return None
 
 
 def self_validation(args, dataset_name, base_model, prop_valid, num_iter=100, loss='error', gaussian=True, pool=7, select_pool=False):
-    '''
-    - DL2019, DL2020, DLHard 에서 일정 비율(a%)를 validation dataset으로 활용하여 각 데이터셋에서 threshold를 정한다.
-    - threshold를 정하는 방법
-        - top_k개 각 레이블마다 특정 metric을 최대로 하는 방법 (Scut)
-        - youden_thres (metric: AUC)
-        - f1_thres (metric: f1-score)
-        - mean_thres
-        - median_thres
-        - quantile_thres
 
-    '''
-
-    ''' valid dataset 생성 '''
+    ''' valid dataset '''
     set_random_seed(seed=args.random_seed)
 
     split_id = 1
@@ -509,21 +485,18 @@ def self_validation(args, dataset_name, base_model, prop_valid, num_iter=100, lo
     coef_ndcg_kend_list = []
     for i in range(num_iter):
 
-        # 전체 sample index 에서 prop_valid% 만큼 랜덤 샘플링
         num_q = len(dict_embed['qid_list'])
         num_valid = round(num_q * prop_valid)
         # num_test = num_q - num_valid
 
         all_indices = list(range(num_q))
         random.shuffle(all_indices)
-        valid_indices = all_indices[:num_valid]  # 10개 valid
-        test_indices = all_indices[num_valid:]   # 나머지 33개 test
+        valid_indices = all_indices[:num_valid]  
+        test_indices = all_indices[num_valid:]   
 
-        # dict_embed를 valid와 test로 분할
         dict_embed_valid = {key: value[valid_indices] for key, value in dict_embed.items()}
         dict_embed_test = {key: value[test_indices] for key, value in dict_embed.items()}
 
-        ''' valid dataset을 이용하여 threshold 계산 '''
         if args_infer.dataset in ['DL2019', 'DL2020', 'DLHard', 'DLHard_valid']:
             ar = (dict_embed_valid['actual_relevance'] >= 2).int().cpu()
         else:
@@ -531,16 +504,6 @@ def self_validation(args, dataset_name, base_model, prop_valid, num_iter=100, lo
         
         pr = dict_embed_valid['predicted_relevance'].cpu()
 
-        # calculate youden and f1 thres 
-        # youden_threshold_array, f1_threshold_array = youden_f1_thres(pr, ar, roc_curve_bool=False)
-
-        # calculate bayes threshold
-        # if dataset_name in ['msmarcotrain', 'msmarcodev']:
-        #     gaussian = False
-        # else:
-        #     gaussian = True
-
-        # select_pool = True
         if select_pool:
             if loss == 'error':
                 error_threshold_array_1 = bayes_threshold(pr, ar, transform='logit', loss=loss, gaussian=gaussian, pool=1)
@@ -581,7 +544,6 @@ def self_validation(args, dataset_name, base_model, prop_valid, num_iter=100, lo
                 f1_threshold_array = bayes_threshold(pr, ar, transform='logit', loss=loss, gaussian=gaussian, pool=pool)
                 args_infer.threshold = torch.tensor(f1_threshold_array).cuda()
             
-            ''' test dataset에서 성능 확인 '''
             dcg_ndcg_pear_coef, dcg_ndcg_kend_coef, ndcg_ndcg_pear_coef, ndcg_ndcg_kend_coef = calculate_corr(dict_embed_test, threshold=args_infer.threshold, top_k=args_infer.top_k, target_metric=args_infer.target_metric, err_bool=False)
 
             coef_dcg_pear_list.append(dcg_ndcg_pear_coef)
@@ -601,10 +563,6 @@ def self_validation_result(args, prop_valid_range, num_iter, dcg_ndcg='dcg', los
         prop_valid_range = np.array([0.01])
     else:
         dataset_list = ['msmarcodev', 'DL2019', 'DL2020', 'DLHard']
-    
-    ###
-    # dataset_list = ['DL2019', 'DL2020', 'DLHard']
-    ###
 
     df_corr_mean = pd.DataFrame()
     df_corr_std = pd.DataFrame()
@@ -634,7 +592,7 @@ def self_validation_result(args, prop_valid_range, num_iter, dcg_ndcg='dcg', los
 
                 coef_pear_array = np.array(coef_pear_list)
                 coef_kend_array = np.array(coef_kend_list)
-                print(f'nan 비율: {np.isnan(coef_pear_array).mean()}')
+                print(f'nan prop: {np.isnan(coef_pear_array).mean()}')
 
                 corr_mean_pear_list.append(np.nanmean(coef_pear_array))
                 corr_mean_kend_list.append(np.nanmean(coef_kend_array))
@@ -761,7 +719,7 @@ def calculate_corr(dict_embed, threshold, top_k=10, target_metric='ndcg@10', err
             ndcg_ndcg_pear_coef, _ = pearsonr(err_pred, rr_true)
             ndcg_ndcg_kend_coef, _ = kendalltau(err_pred, rr_true)
         else:
-            raise ValueError("target_metric은 'ndcg@10' 또는 'mrr@10'이어야 합니다.")
+            raise ValueError("target_metric have 'ndcg@10' or 'mrr@10'")
 
         return dcg_ndcg_pear_coef, dcg_ndcg_kend_coef, ndcg_ndcg_pear_coef, ndcg_ndcg_kend_coef
     else:
@@ -801,14 +759,12 @@ def dataset_threshold(args, model):
             if j==0:
                 concat_dict_embed = {key: [] for key in dict_embed.keys()}
             
-            # dict_embed 값들을 리스트에 저장
             for key in dict_embed.keys():
                 concat_dict_embed[key].append(dict_embed[key])
             
             # if j > 5:
             #     break
 
-        # 리스트에 저장된 텐서들을 하나로 결합
         for key in concat_dict_embed.keys():
             concat_dict_embed[key] = torch.cat(concat_dict_embed[key], dim=0)
         
@@ -872,10 +828,8 @@ def dataset_valid_threshold(args):
 
     dict_embed_DL2019_DL2020 = {k: torch.cat([dict_embed_DL2019[k], dict_embed_DL2020[k]]) for k in dict_embed_DL2019}
 
-    # qid_list에서 qid_list_DLHard_valid에 해당하는 인덱스 찾기
     mask = torch.isin(dict_embed_DL2019_DL2020["qid_list"], qid_list_DLHard_valid)
 
-    # 필터링 수행
     dict_embed_DLHard_valid = {
         k: v[mask] if v.shape[0] == dict_embed_DL2019_DL2020["qid_list"].shape[0] else v
         for k, v in dict_embed_DL2019_DL2020.items()

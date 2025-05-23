@@ -8,7 +8,6 @@ import pickle
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from pyserini.search.lucene import LuceneSearcher
 from scipy.stats import pearsonr, spearmanr, kendalltau
 
 os.chdir('/root/default/Neural-IR')
@@ -58,10 +57,6 @@ def dense_retriever_perturbation(args):
         q_embed = model_base.encode_queries(qtext, show_progress_bar=False, convert_to_tensor=True).to(device='cpu')
 
         embeddings_sigma = args.noise_std
-        # if args.noise_estimate :
-        #     embeddings_var = q_embed.var(axis=0)
-        # else:
-        #     embeddings_var = args.noise_std
 
         noise_shape = [q_embed.shape[0], args.iter_num]
         noise = torch.normal(mean=0, std=torch.tensor(embeddings_sigma), size=noise_shape)
@@ -136,14 +131,10 @@ if __name__ == '__main__':
     parser.add_argument("--checkpoint_path", type=str, default='')
     parser.add_argument("--setup", type=str, default='')
 
-    #######
-    #######
     parser.add_argument("--random_seed", type=int, default=11)
     parser.add_argument('--noise_estimate', type=bool, default=True) 
     parser.add_argument('--noise_std', type=float, default=0.05)
     parser.add_argument('--iter_num', type=int, default=3)
-    #######
-    #######
 
     try:
         args = parser.parse_args()

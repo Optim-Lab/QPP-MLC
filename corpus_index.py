@@ -46,7 +46,6 @@ def corpus_index(corpus, args):
 
     index_flat = faiss.IndexFlatIP(model_base.doc_model[1].word_embedding_dimension)
     index = faiss.IndexIDMap2(index_flat)
-    # index = faiss.IndexIDMap(index_flat)
     
     corpus_start_idx = 0
     corpus_end_idx = 1000
@@ -62,26 +61,8 @@ def corpus_index(corpus, args):
             show_progress_bar = args.show_progress_bar,
             convert_to_tensor = args.convert_to_tensor
             ).to(device='cpu')
-        ##############
-        ##############
-        # sub_corpus_embeddings = model_base.encode_corpus(
-        #     corpus_list[corpus_start_idx:corpus_end_idx],
-        #     batch_size = args.batch_size,
-        #     show_progress_bar = args.show_progress_bar,
-        #     convert_to_tensor = args.convert_to_tensor,
-        #     # device = 'cpu'
-        #     device = 'cuda:0'
-        #     )
-        # torch.cuda.memory_summary()
-        # torch.cuda.list_gpu_processes()
-        # torch.cuda
-        ##############
-        ##############
         
         index.add_with_ids(np.array(sub_corpus_embeddings), np.array(corpus_ids_numeric[corpus_start_idx:corpus_end_idx]))
-        # index.add_with_ids(sub_corpus_embeddings.to(device='cpu'), corpus_ids[corpus_start_idx:corpus_end_idx])
-
-        # corpus_embeddings[corpus_start_idx:corpus_end_idx] = sub_corpus_embeddings
         
     # torch.save(corpus_embeddings, os.path.join(faiss_dir, "{}_{}_embeddings.pt".format(args.base_model, args.corpus_name)))
     faiss.write_index(index, os.path.join(faiss_dir, "{}_{}_faiss".format(args.base_model, args.corpus_name)))
@@ -121,7 +102,6 @@ def query_index(args, dataset_name):
 
     index_flat = faiss.IndexFlatIP(model_base.doc_model[1].word_embedding_dimension)
     index = faiss.IndexIDMap2(index_flat)
-    # index = faiss.IndexIDMap(index_flat)
     
     queries_start_idx = 0
     queries_end_idx = 1000
@@ -179,7 +159,6 @@ if __name__ == '__main__':
     for i in range(9):
         file_path = os.path.join(path_collections, f'docs{i:02d}.json')
         
-        # 파일이 존재하는지 확인
         if os.path.exists(file_path):
             with open(file_path, encoding='utf8') as fIn:
                 for line in tqdm(fIn):

@@ -14,4 +14,4 @@ pip install \
    'lightgbm==4.0.0'
 
 # install python package
-pip install -r /root/default/Neural-IR/requirements.txt
+pip install -r /root/default/qppmlc/requirements.txt

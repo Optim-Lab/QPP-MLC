@@ -13,8 +13,8 @@ Contents
 - [Unsupervised QPP](#Unsupervised-QPP)
   - [Predicted Performance](#Predicted-Performance)
 - [QPP-MLC](#QPP-MLC)
-  - [QPP-MLC: training](#QPP-MLC:-training)
-  - [QPP-MLC: inference](#QPP-MLC:-inference)
+  - [Training QPP-MLC](#Training-QPP-MLC)
+  - [Inference with QPP-MLC](#Inference-with-QPP-MLC)
   - [QPP-MLC-b](#QPP-MLC-b)
 
 ## Environment Settings
@@ -54,7 +54,7 @@ python convert_collection_to_jsonl.py \
 ```
 
 #### Query preprocessing
-We convert the query files from four TREC datasets — **msmarcodev**, **DL2019**, **DL2020**, and **DLHard** — into JSONL format.
+We convert the query files from four TREC datasets - **msmarcodev**, **DL2019**, **DL2020**, and **DLHard** - into JSONL format.
 ```bash
 python data_load.py --path_raw ./datasets/TREC --dataset_list msmarcotrain msmarcodev DL2019 DL2020 DLHard
 ```

@@ -68,12 +68,12 @@ def parse_listwise_response(response: str):
     for line in response_lines:
         if "relevant" in line.lower():
             if "irrelevant" in line.lower():
-                relevance_list.append(0)  # "Irrelevant" 포함
+                relevance_list.append(0)  # "Irrelevant"
             else:
                 relevance_list.append(1)  # "Relevant" only
         else:
             # print(f"Unexpected line format: '{line}'")
-            relevance_list.append(-1)  # 예외 처리용
+            relevance_list.append(-1)
 
     return relevance_list
 
@@ -410,8 +410,6 @@ def QPP_gpt_result(args, subset=False):
 
 
 #%%
-
-#%%
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, default='gpt_4o')
@@ -439,11 +437,6 @@ if __name__ == '__main__':
         print("interactive")
         args = parser.parse_args([])
         args.base_model = 'bm25'
-        # args.base_model = 'ance'
-        # args.dataset = 'DL2019'
-        # args.dataset = 'DL2020'
-        # args.dataset = 'DLHard'
-        # args.dataset = 'msmarcotrain'
         args.dataset = 'msmarcodev'
         args.dataset_list = ['DL2019', 'DL2020', 'DLHard']
         args.dataset_list = ['msmarcodev', 'DL2019', 'DL2020', 'DLHard']

@@ -93,13 +93,8 @@ class Driver(object):
             eval_metric_dict.update(eval_metric_dict_)
             eval_metric_dict_tilde.update(eval_metric_dict_tilde_)
 
-            ###########
-            ###########
             print(dataset_name)
             print(eval_metric_dict_)
-            print(eval_metric_dict_tilde_)
-            ###########
-            ###########
         
         result_dict = eval_metric_dict | {'loss_train' : loss_total}
         result_dict_tilde = eval_metric_dict_tilde | {'loss_train' : loss_total}
@@ -110,10 +105,6 @@ class Driver(object):
     def inference(self, dataset_name):
 
         ''' evaluation dataset load '''
-        # dataset_name = 'DL2019'
-        # dataset_name = 'DL2020'
-        # dataset_name = 'DLHard'
-        # dataset_name = 'msmarcodev'
         args_infer = copy.deepcopy(self.args)
         args_infer.dataset = dataset_name
         if dataset_name in ['DL2019', 'DL2020', 'DLHard']:

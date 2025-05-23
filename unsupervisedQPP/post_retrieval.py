@@ -43,8 +43,8 @@ def RM1(pid_list, score_list, index_reader, k, mu=1000):
         else:
             doc_vec = index_reader.get_document_vector(pid)
             if doc_cache is not None:
-                doc_cache[pid] = doc_vec  # 전역 캐시에 저장
-        local_cache[pid] = doc_vec  # 현재 함수에서 반복 사용용
+                doc_cache[pid] = doc_vec
+        local_cache[pid] = doc_vec
         V += doc_vec.keys()
         doc_len[idx_p] = sum(doc_vec.values())
 
@@ -107,6 +107,7 @@ def SIGMA_MAX(score_list):
 
     return max_std, len(scores)
 
+
 def SIGMA_X(qtokens, score_list, x):
 
     top_score = score_list[0]
@@ -168,7 +169,7 @@ def UEF_NQC(searcher, base_model, model_base, faiss_index, rm1, score_list, term
         min_len = min(len(score_list), len(score))
 
         if min_len < top_k:
-            uef_score = pearsonr(score_list[:min_len], score[:min_len])[0] * nqc_norm # pid_list는 원래 qid에 대한 list
+            uef_score = pearsonr(score_list[:min_len], score[:min_len])[0] * nqc_norm
         else:
             uef_score = pearsonr(score_list[:top_k], score)[0] * nqc_norm
 
@@ -182,6 +183,7 @@ def UEF_NQC(searcher, base_model, model_base, faiss_index, rm1, score_list, term
 
     return uef_score
 
+
 #%%
 def post_retrieval(args, base_model, dataset):
 
@@ -194,7 +196,7 @@ def post_retrieval(args, base_model, dataset):
     else:
         faiss_dir = "./corpus_faiss/{}_{}_faiss/{}_{}_faiss".format(base_model, args.corpus_name, base_model, args.corpus_name)
     
-    faiss_index = faiss.read_index(os.path.abspath(faiss_dir)) # 3~10분 
+    faiss_index = faiss.read_index(os.path.abspath(faiss_dir)) # 3~10 min
     res = faiss.StandardGpuResources()  # use a single GPU
     faiss_index = faiss.index_cpu_to_gpu(res, 0, faiss_index)
 
@@ -252,7 +254,7 @@ def post_retrieval(args, base_model, dataset):
     if dataset == 'msmarcotrain':
         queries = dict(list(queries.items())[:5000])
         if list(queries.keys()) != list(run.keys()):
-            print("Warning: queries와 run의 key 순서가 다릅니다!")
+            print("Warning: queries, run differ key order")
 
     ''' qid, qtext example '''
     print(f'base_model: {base_model}, dataset: {dataset}')

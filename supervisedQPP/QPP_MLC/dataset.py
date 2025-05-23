@@ -85,16 +85,15 @@ class DatasetQPPCross(Dataset):
             if len(run[qid]) < self.args.top_k:
                 print(f"skip {qid} : result list less then top_k")
                 continue
-
-            # qid에 대한 top_k개 pid와 score 생성
+            # Generate top-k pids and scores for the given qid
             pid_k, score = zip(*[(pid, score) for pid, score in sorted(run[qid].items(), key=lambda x: x[1], reverse=True)[:self.args.top_k]])
             score = torch.tensor(score, dtype=float)
 
-            # qid에 대한 relevance doc과 top_k doc의 관련성 생성
+            # Generate relevance between the relevant docs and top-k docs for the given qid
             qrels_posi = {k: v for k, v in qrels[qid].items() if v > 0}
             relevance_grades = torch.tensor([qrels_posi.get(key, 0) for key in pid_k])
             
-            # searcher에서 doc의 text를 가져와 토크나이징
+            # Retrieve and tokenize document text from the searcher
             query_pad = [query[qid] for _ in pid_k]
             doc_top_k = [json.loads(self.searcher.doc(str(pid)).raw())['contents'] for pid in pid_k]
             query_doc_top_k_pair = list(zip(query_pad, doc_top_k))
