@@ -1,32 +1,38 @@
-# Query Performance Prediction for Dense Retriever
+# Generalizing Query Performance Prediction under Retriever and Concept Shifts via Data-driven Correction
+
+![QPP-MLC Architecture](./fig_QPP_arch5.png)
+
 
 Contents
-- [Environments Settings](#Environments-Settings)
+- [Environment Settings](#Environments-Settings)
 - [Data Preparation](#Data-Preparation)
   - [Raw File Download](#Raw-File-Download) 
   - [Preprocessing](#Preprocessing)
   - [Indexing](#Indexing)
   - [Retrieval](#Retrieval)
-- [QPP](#QPP)
+- [Unsupervised QPP](#Unsupervised-QPP)
   - [Predicted Performance](#Predicted-Performance)
-  - [Evaluation QPP](#Evaluation-QPP)
+- [QPP-MLC](#QPP-MLC)
+  - [QPP-MLC: training](#QPP-MLC:-training)
+  - [QPP-MLC: inference](#QPP-MLC:-inference)
+  - [QPP-MLC-b](#QPP-MLC-b)
 
-Note that for ease of use, we already uploaded the predicted performance files for all QPP methods reported in our paper.
-
-## Environments Settings
-We recommend running all the things in a Linux environment. 
+## Environment Settings
+We recommend running all components	in a Linux environment. 
 To set up the environment on a new server or machine, simply run:
 ```bash
 bash setup.sh
 ```
 
 ## Data Preparation
-Query performance prediction for dense retriever needs **query**, **corpus**, **BM25_index**, **retrieval results files**, and **actual performance files**.
+Query performance prediction needs **query**, **corpus**, **BM25_index**, **ANCE_faiss_index**, **retrieval results files**, and **actual performance files**.
 
 ### Raw File Download
 
-#### TREC 데이터 다운받기
-아래 커맨드를 이용하여 MSMARCO passage corpus를 다운로드 받을 수 있습니다. 8.8M 개의 passage이 존재하고 압축파일의 용량은 1.0GB, 풀어진 데이터는 2.9GB 입니다.
+#### Downloading TREC Data
+You can download the MS MARCO passage corpus using the command below.
+The dataset contains approximately 8.8M passages.
+The compressed file is 1.0 GB, and the extracted size is 2.9 GB.
 ```bash
 mkdir -p datasets/collections/msmarco-passage
 
@@ -36,25 +42,32 @@ tar xvfz datasets/collections/msmarco-passage/collection.tar.gz -C datasets/coll
 ```
 
 ### Preprocessing
-corpus의 형식을 tsv에서 jsonl으로 바꾸고 query, qrels의 raw data 또한 jsonl 형식으로 바꿉ㄴ디ㅏ.
-#### tsv 파일 jsonl로 변형
-tsv 형식의 corpus 파일을 9개의 jsonl 형식의 파일로 분할하여 저장합니다. 3.2GB의 용량이 필요합니다.
+We convert the original corpus from TSV format to JSONL format. The raw query and qrels files are also converted to JSONL.
+
+#### Converting TSV corpus to JSONL
+The corpus in TSV format is split into 9 JSONL files.  
+This step requires approximately 3.2 GB of disk space.
 ```bash
 python convert_collection_to_jsonl.py \
   --collection-path datasets/collections/msmarco-passage/collection.tsv \
   --output-folder datasets/collections/msmarco-passage/collection_jsonl
 ```
 
-#### query preprocessing
-4개의 TREC 데이터셋 **msmarcodev**, **DL2019**, **DL2020**, **DLHard**의 형식을 모두 jsonl으로 바꿉니다.
+#### Query preprocessing
+We convert the query files from four TREC datasets — **msmarcodev**, **DL2019**, **DL2020**, and **DLHard** — into JSONL format.
 ```bash
 python data_load.py --path_raw ./datasets/TREC --dataset_list msmarcotrain msmarcodev DL2019 DL2020 DLHard
 ```
 
 ### Indexing
-사전에 corpus에 대한 두가지 인덱싱 과정이 필요하다. 먼저 언어 모형 기반 QPP 모델을 위해 lucene를 이용한 인덱스가 있다. 이어서 dense retrieval을 위한 2개 base_model(DPR, ANCE)을 이용하여 corpus의 embedding을 faiss_index로 저장한다.
-#### Indexing corpus by pyserini.index.lucene
-사용자의 환경에 따라 threads 조정 가능. index 결과는 4.2GB 요구됨.
+We perform two types of indexing on the corpus before running the QPP models.  
+First, we build a **Lucene index** using Pyserini for language model-based QPP models.  
+Next, for dense retrieval, we generate FAISS indexes of the corpus embeddings using **ANCE**.
+
+#### Indexing the corpus with pyserini.index.lucene
+You can adjust the number of threads based on your system environment.  
+The resulting Lucene index requires approximately 4.2 GB of disk space.
+
 ```bash
 python -m pyserini.index.lucene \
   --collection JsonCollection \
@@ -65,68 +78,124 @@ python -m pyserini.index.lucene \
   --storePositions --storeDocvectors --storeRaw
 ```
 
-#### Corpus index
-DPR, ANCE를 이용한 corpus embedding 후 faiss index 저장. 각 base_model의 index는 26GB, 즉 52GB 요구됨.
+#### Corpus indexing
+We embed the corpus using **ANCE** and store the result as a FAISS index.  
+This process requires approximately **52 GB** of disk space.
 ```bash
 python corpus_index.py --base_model ance
-python corpus_index.py --base_model dpr
 ```
 
 ### Retrieval
-faiss idnex를 이용하여 base_model 2개와 datasets 4개의 조합으로 총 8개의 retrieval_results를 생성.
-#### Get retrieval results from dense retriever (DPR, ANCE)
+We generate retrieval results for all combinations of retrievers (BM25, ANCE) and datasets (msmarcotrain, msmarcodev, DL2019, DL2020, DLHard).
+
+#### Get retrieval results from dense retriever (ANCE)
 ```bash
 python retrieval.py \
-  --base_model_list dpr ance \
+  --base_model_list ance \
   --dataset_list msmarcotrain msmarcodev DL2019 DL2020 DLHard
 ```
 
-BM25 index를 이용하여 BM25 base_model과 datasets 4개의 조합으로 총 4개의 retrieval_results를 생성.
 #### Get retrieval results from sparse lexical retriever (BM25)
 ```bash
 python bm25.py --base_model_list bm25 --dataset_list msmarcotrain msmarcodev DL2019 DL2020 DLHard
 ```
 
-#### Evaluation retrieval
-retrieval_results외 qrels을 이용하여 NDCG, MRR 등 target_metric 계산. 추후 QPP의 ground_truth label로 사용된다.
+#### Evaluate Retrieval Results
+We compute target metrics such as nDCG and MRR using the retrieval results and the corresponding qrels.
+These metric values will later serve as ground-truth labels for supervised QPP training.
 ```bash
 python evaluation_retrieval.py \
   --base_model_list bm25 dpr ance \
   --dataset_list msmarcotrain msmarcodev DL2019 DL2020 DLHard
 ```
 
-## QPP
+## Unsupervised QPP
 
-### Predicted Performance
+### Predicting Query Performance (Unsupervised)
 
-#### Query performance prediction (using post-retrieval method)
+#### Query performance prediction (using unsupervised post-retrieval method)
+Run post-retrieval QPP methods (e.g., Clarity, NQC) on the retrieval results:
 ```bash
-python QPP_method/post_retrieval.py \
-  --query_path ./datasets/TREC/DL2019/queries_DL2019.jsonl \
-  --qrels_path ./datasets/TREC/DL2019/qrels_DL2019.jsonl \
-  --run_path ./retrieval_results/dpr_DL2019_result \
-  --index_path ./datasets/collections/lucene-index-msmarco-passage \
-  --output_path ./output/predicted_performance
-
-#   --query_path ./datasets/TREC/{dataset}/queries_{dataset}.jsonl \
-#   --qrels_path ./datasets/TREC/{dataset}/qrels_{dataset}.jsonl \
-#   --run_path ./retrieval_results/{base_model}_{dataset}_result \
-#   --index_path ./datasets/collections/lucene-index-msmarco-passage \
-#   --output_path ./output/predicted_performance
+python unsupervisedQPP/post_retrieval.py \
+  --base_model_list bm25 ance \
+  --dataset_list msmarcotrain msmarcodev DL2019 DL2020 DLHard
 ```
 
-### Evaluation QPP
-
-#### Evaluation QPP clarity
+#### Evaluate Unsupervised QPP
+Compute correlations (e.g., Pearson, Kendall) between predicted and actual performance:
 ```bash
 python evaluation_QPP.py \
-  --ap_path ./output/actual_performance/dpr_DL2019_actual_performance.json \
-  --pp_path ./output/predicted_performance/dpr_DL2019_clarity-score-k100 \
-  --target_metric mrr@10
+  --base_model_list bm25 ance \
+  --dataset_list msmarcodev DL2019 DL2020 DLHard
+```
+## QPP-MLC (Supervised)
 
-# python evaluation_QPP.py \
-#   --ap_path ./output/actual_performance/{base_model}_{dataset}_actual_performance.json \
-#   --pp_path ./output/predicted_performance/{base_model}_{dataset}_{name} \
-#   --target_metric mrr@10
+### Training QPP-MLC
+Train the multi-label classification (MLC) model on the msmarcotrain dataset:
+```bash
+python supervisedQPP/QPP_MLC/main.py \
+  --name QPP_MLC \
+  --mode normal \
+  --base_model bm25 \
+  --dataset msmarcotrain \
+  --dataset_list msmarcodev DL2019 DL2020 DLHard \
+  --batch_size 16 \
+  --lr 2e-5 \
+  --top_k 10 \
+  --top_m 10 \
+  --embed_model bert_cross \
+  --trans_nhead 8 \
+  --trans_num_layers 1 \
+  --class_weight one \
+  --posi_weight 1.0 \
+  --err True \
+  --threshold 0.5 \
+  --action training
+```
 
+### Inference with QPP-MLC
+Predict query performance on new datasets using the trained MLC model:
+```bash
+python supervisedQPP/QPP_MLC/main.py \
+  --name QPP_MLC \
+  --mode normal \
+  --base_model bm25 \
+  --dataset msmarcotrain \
+  --base_model_list bm25 ance \
+  --dataset_list msmarcodev DL2019 DL2020 DLHard \
+  --batch_size 16 \
+  --lr 2e-5 \
+  --top_k 10 \
+  --top_m 10 \
+  --embed_model bert_cross \
+  --trans_nhead 8 \
+  --trans_num_layers 1 \
+  --class_weight one \
+  --posi_weight 1.0 \
+  --err True \
+  --threshold 0.5 \
+  --action inference
+```
+
+### QPP-MLC-b
+
+#### Extract Embeddings and Metadata
+Generates embedding and metadata files from the trained QPP-MLC model.  
+The output will be stored in: ./supervisedQPP/QPP_MLC/checkpoint/data_{base_model}_{dataset}_QPP_MLC_{target_metric}
+```bash
+python supervisedQPP/QPP_MLC/thres.py --action embed
+```
+
+#### Generate Thresholds
+Computes optimal thresholds for binarizing predicted relevance scores.
+The output will be saved in: ./supervisedQPP/QPP_MLC/checkpoint/thres_{base_model}_{dataset}_QPP_MLC_{target_metric}
+```bash
+python supervisedQPP/QPP_MLC/thres.py --action gener_thres
+```
+
+#### Generate Prediction Results
+Evaluates QPP-MLC-b predictions using computed thresholds and generates result tables.  
+The output will be saved in: ./output/
+```bash
+python supervisedQPP/QPP_MLC/thres.py --action gener_result
 ```

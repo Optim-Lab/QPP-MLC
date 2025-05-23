@@ -5,30 +5,19 @@ import json
 import torch
 import argparse
 import pickle
-import copy
-import tiktoken
 import openai 
 import pandas as pd
-import warnings
-import matplotlib.pyplot as plt
-from adjustText import adjust_text
+import numpy as np
 from pyserini.search.lucene import LuceneSearcher
-from collections import Counter
 from tqdm import tqdm
-from pyserini.search.lucene import LuceneSearcher
-# warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
-
 from scipy.stats import pearsonr, spearmanr, kendalltau
 
-import numpy as np
-from sklearn.metrics.cluster import contingency_matrix, adjusted_rand_score, normalized_mutual_info_score
-
-os.chdir('/root/default/Neural-IR')
+os.chdir('/root/default/qppmlc')
 print(os.getcwd())
 sys.path.append(os.getcwd())
 
 #%%
-openai.api_key = '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'
+openai.api_key = 'insert_your_api_key'
 def get_response(prompt):
     client = openai.OpenAI(api_key=openai.api_key)
     response = client.chat.completions.create(
@@ -53,8 +42,7 @@ def create_prompt(query, passage):
 
     return prompt_text
 
-# question = query_i
-# document_list = doc_top_k
+
 def create_listwise_prompt(query, document_list):
     prompt_text = f"""
     Instruction: The following documents are retrieved in ranked order (Document 1 is the top-ranked). Assess the relevance of each document to the query. For each document, output "Relevant" or "Irrelevant" based on its content.
@@ -71,6 +59,7 @@ def create_listwise_prompt(query, document_list):
     # print(prompt_text)
 
     return prompt_text
+
 
 def parse_listwise_response(response: str):
     response_lines = response.strip().split('\n')
@@ -89,27 +78,6 @@ def parse_listwise_response(response: str):
     return relevance_list
 
 
-# def QPPGPT(docs, seedset):
-#     seedwords = {f'set {i+1}': seedset.T.iloc[i].tolist() for i in range(len(seedset.T))}
-#     assignment = []
-
-#     for i, document in enumerate(tqdm(docs, desc="Processing documents")):
-#         try:
-#             # truncated_doc = truncating(document)
-#             prompt = create_prompt(seedwords, document)
-#             response = get_response(prompt)
-#             assignment.append(response)
-#         except Exception as e:
-#             print(f"Error at document {i}: {e}")
-
-#     return assignment
-
-# question = 'How to watch tv?'
-# passage = 'apple tv is good'
-# prompt = create_prompt(question, passage)
-# response = get_response(prompt)
-
-#%%
 def load_data(args, split=1, method='listwise'):
     searcher = LuceneSearcher(os.path.abspath(args.index_path))
 
@@ -197,8 +165,7 @@ def load_data(args, split=1, method='listwise'):
         elif method == 'listwise':
             
             prompt = create_listwise_prompt(question=query_i, document_list=doc_top_k)
-            # response = get_response(prompt)
-            response = 'Document 1: Relevant  \nDocument 2: Relevant  \nDocument 3: Relevant  \nDocument 4: Irrelevant  \nDocument 5: Relevant  \nDocument 6: Relevant  \nDocument 7: Relevant  \nDocument 8: Relevant  \nDocument 9: Relevant  \nDocument 10: Relevant'
+            response = get_response(prompt)
             # print(response)
 
             binary_labels = parse_listwise_response(response)
@@ -212,19 +179,9 @@ def load_data(args, split=1, method='listwise'):
                     json.dump(result_dict, f, indent=4, sort_keys=False)
 
     return result_dict
-# 12*43+2
-# 12*54+2
-# 12*6980+2
+
 
 def compute_batch_rr(predicted_relevance):
-
-    # if self.args.threshold_optimal:
-    #     threshold_optimal = torch.tensor([0.061, 0.043, 0.034, 0.025, 0.011, 0.017, 0.019, 0.013, 0.008, 0.007], device=predicted_relevance.device)
-    #     threshold_optimal = threshold_optimal[:self.min_k_m]
-    #     predicted_relevance_binary = (predicted_relevance_partial > threshold_optimal).int()
-    # else:
-    #     predicted_relevance_binary = (predicted_relevance_partial > self.args.threshold).int()
-    
     predicted_relevance_partial = predicted_relevance
     predicted_relevance_binary = predicted_relevance_partial
 
@@ -347,15 +304,6 @@ def QPP_gpt_result(args, subset=False):
         idcg_pred = compute_batch_idcg(predicted_relevance)
         ndcg_pred = dcg_pred / idcg_pred if idcg_pred > 0 else 0
 
-        # true
-        # if qid not in qrels:
-        #     print(f"skip {qid}")
-        #     continue
-
-        # if len(run[qid]) < args.top_k:
-        #     print(f"skip {qid} : result list less then top_k")
-        #     continue
-
         pid_k, score = zip(*[(pid, score) for pid, score in sorted(run[qid].items(), key=lambda x: x[1], reverse=True)[:args.top_k]])
         score = torch.tensor(score, dtype=float)
 
@@ -368,7 +316,6 @@ def QPP_gpt_result(args, subset=False):
         query[qid]
         doc_top_k
         
-        ###########
         # Compute relevance array
         run_pids = list(run[qid].keys())[:args.top_k]
         rel_array = np.zeros(args.top_k)  # Initialize with zeros
@@ -387,7 +334,6 @@ def QPP_gpt_result(args, subset=False):
         # Compute nDCG@m
         ndcg_true = dcg_true / idcg_true if idcg_true > 0 else 0
 
-        ###########
         # Compute rr@m
         positions = torch.arange(1, args.top_k + 1).float()
         if args.dataset in ['msmarcotrain', 'msmarcodev']:
@@ -396,7 +342,6 @@ def QPP_gpt_result(args, subset=False):
             relevance_binary = relevance_grades[:args.top_k] >= 2
 
         rr_true = (relevance_binary / positions).max()
-        ###########
         
         actual_relevance_list[i, :] = relevance_grades
 
@@ -414,9 +359,7 @@ def QPP_gpt_result(args, subset=False):
         ndcg_pred_list.append(ndcg_pred)
         
         ndcg_tilde_list.append(ndcg_tilde)
-        ##############
-        ##############
-        ##############
+        
         if idcg_pred == 0:
             ndcg_pred = 0
         else:
@@ -467,386 +410,6 @@ def QPP_gpt_result(args, subset=False):
 
 
 #%%
-def eda_gpt_4o(args, dataset_name):
-    
-    # dataset_name = 'msmarcodev'
-    # dataset_name = 'DL2019'
-    # dataset_name = 'DL2020'
-    # dataset_name = 'DLHard'
-    args_infer = copy.deepcopy(args)
-    args_infer.dataset = dataset_name
-    if dataset_name in ['DL2019', 'DL2020', 'DLHard']:
-        args_infer.target_metric = 'ndcg@10'
-    
-    args_infer.run_path = f'./retrieval_results/{args_infer.base_model}_{args_infer.dataset}_result'
-    args_infer.qrels_path = f'./datasets/TREC/{args_infer.dataset}/qrels_{args_infer.dataset}.jsonl'
-    args_infer.query_path = f'./datasets/TREC/{args_infer.dataset}/queries_{args_infer.dataset}.jsonl'
-    args_infer.ap_path = f'./output/actual_performance/{args_infer.base_model}_{args_infer.dataset}_actual_performance.json'
-    args_infer.setup = f"{args_infer.base_model}_{args_infer.dataset}_{args_infer.name}"
-    args_infer.setup_dataset = f"{args_infer.base_model}_{args_infer.dataset}_{args_infer.target_metric}"
-    args_infer.batch_size = int(32)
-
-    if dataset_name == 'msmarcodev':
-        subset = True
-    else:
-        subset = False
-    
-    dict_embed, ap_list, pp_list = QPP_gpt_result(args_infer, subset=subset)
-    dict_embed.keys()
-    dict_embed['qid_list']
-
-    #############
-    #############
-
-    save_dir = f"./output_fig/{args.name}_{args.base_model}/"
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-
-    df, df_pred, df_true, df_score = generate_df(dict_embed)
-    num_q = dict_embed['score'].shape[0]
-
-    save_path = os.path.join(save_dir, f"df_{dataset_name}.csv")
-    df.to_csv(save_path)
-    
-    ''' scatter plot for metric '''
-    # rr@10
-    fig_rr, rr_pear_coef, rr_kend_coef = scatter_metric(
-        pred=df['rr_pred'].iloc[:num_q],
-        true=df['rr_true'].iloc[:num_q],
-        model_name=args_infer.name,
-        retriever=args_infer.base_model,
-        dataset_name=dataset_name,
-        metric='rr@10',
-        query_ids=None,
-        show_plot=True
-        )
-    
-    # ndcg@10
-    fig_ndcg, ndcg_pear_coef, ndcg_kend_coef = scatter_metric(
-        pred=df['ndcg_pred'].iloc[:num_q],
-        true=df['ndcg_true'].iloc[:num_q],
-        model_name=args_infer.name,
-        retriever=args_infer.base_model,
-        dataset_name=dataset_name,
-        metric='ndcg@10',
-        query_ids=None,
-        show_plot=True
-        )
-
-    # dcg@10
-    fig_dcg, dcg_pear_coef, dcg_kend_coef = scatter_metric(
-        pred=df['dcg_pred'].iloc[:num_q],
-        true=df['dcg_true'].iloc[:num_q],
-        model_name=args_infer.name,
-        retriever=args_infer.base_model,
-        dataset_name=dataset_name,
-        metric='dcg@10',
-        query_ids=None,
-        show_plot=True
-        )
-    
-    # idcg@10
-    fig_idcg, idcg_pear_coef, idcg_kend_coef = scatter_metric(
-        pred=df['idcg_pred'].iloc[:num_q],
-        true=df['idcg_true'].iloc[:num_q],
-        model_name=args_infer.name,
-        retriever=args_infer.base_model,
-        dataset_name=dataset_name,
-        metric='idcg@10',
-        query_ids=None,
-        show_plot=True
-        )
-
-    # ndcg@10 tilde
-    fig_ndcg_tilde, ndcg_tilde_pear_coef, ndcg_tilde_kend_coef = scatter_metric(
-        pred=df['ndcg_tilde'].iloc[:num_q],
-        true=df['ndcg_true'].iloc[:num_q],
-        model_name=args_infer.name,
-        retriever=args_infer.base_model,
-        dataset_name=dataset_name,
-        metric='ndcg@10_tilde',
-        query_ids=None,
-        show_plot=True
-        )
-
-    fig_list_scatter = [fig_rr, fig_ndcg, fig_dcg, fig_idcg, fig_ndcg_tilde]
-
-    cols = 3
-    rows = 2
-    fig_scale = 8
-    fig_scatter, axes = plt.subplots(rows, cols, figsize=(cols * 6, rows * 5))
-
-    # Figure 배치
-    for idx, ax in enumerate(axes.flatten()):
-        if idx < len(fig_list_scatter):
-            fig_list_scatter[idx].canvas.draw()  # Figure 렌더링
-            img = np.array(fig_list_scatter[idx].canvas.renderer.buffer_rgba())  # RGBA 변환
-            ax.imshow(img)  # 이미지로 표시
-            # ax.set_title(f"Query {idx+1}")
-        ax.axis("off")  # 축 제거
-
-    # 전체 레이아웃 조정
-    plt.tight_layout()
-    plt.show()
-    
-    save_path = os.path.join(save_dir, f"scatter_{dataset_name}_merge.png")
-    fig_scatter.savefig(save_path, dpi=300, bbox_inches="tight")  # 이미지 저장
-
-    ''' bar plot '''
-    fig_bar_list = plot_bar(df_pred, df_true, df_score, dataset_name, show_plot=False)
-    fig_bar_list[0]
-    # plt.scatter([1,2],[2,3])
-
-    # 8×6 Grid에 배치하여 표시
-    cols = 4
-    rows = (len(fig_bar_list) - 1) // cols + 1
-
-    fig_scale = 8
-    fig_bar, axes = plt.subplots(rows, cols, figsize=(cols * fig_scale * 1.5, rows * fig_scale))
-
-    # Figure 배치
-    for idx, ax in enumerate(axes.flatten()):
-        if idx < len(fig_bar_list):
-            fig_bar_list[idx].canvas.draw()  # Figure 렌더링
-            img = np.array(fig_bar_list[idx].canvas.renderer.buffer_rgba())  # RGBA 변환
-            ax.imshow(img)  # 이미지로 표시
-            # ax.set_title(f"Query {idx+1}")
-        ax.axis("off")  # 축 제거
-
-    # 전체 레이아웃 조정
-    plt.tight_layout()
-    plt.show()
-    
-    save_path = os.path.join(save_dir, f"bar_{dataset_name}.png")
-    fig_bar.savefig(save_path, dpi=300, bbox_inches="tight")  # 이미지 저장
-
-    return None
-
-
-def scatter_metric(pred, true, model_name, retriever, dataset_name, metric, query_ids=None, show_plot=False):
-
-    pear_coef, _ = pearsonr(pred, true)
-    kend_coef, _ = kendalltau(pred, true)
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.scatter(pred, true, alpha=0.7, color="royalblue", edgecolors="black", s=70)
-    
-    if query_ids is None:
-        query_ids = np.arange(1, len(pred) + 1)
-
-    # 텍스트 객체 리스트 (adjustText에 사용)
-    text_objects = []
-    
-    for i, (x, y) in enumerate(zip(pred, true)):
-        txt = ax.text(x, y, str(query_ids[i]), fontsize=10, color="black")
-        text_objects.append(txt)  # 텍스트 객체 저장
-
-    # adjustText 적용 (텍스트 자동 위치 조정)
-    adjust_text(text_objects, expand=(3, 2), arrowprops=dict(arrowstyle='->', color='red'))
-
-    ax.set_title(f'{model_name}, {retriever}, {dataset_name}, {metric}', fontsize=14)
-    ax.set_xlabel(f'{metric}_pred', fontsize=18)
-    ax.set_ylabel(f'{metric}_true', fontsize=18)
-
-    if metric == 'rr@10' or metric == 'ndcg@10':
-        ax.set_xlim([-0.05, 1.05])
-        ax.set_ylim([-0.05, 1.05])
-
-    text_str = f"Pearson: {pear_coef:.2f}\nKendall: {kend_coef:.2f}"
-    ax.text(
-        0.95, 0.05, text_str, transform=plt.gca().transAxes,
-        fontsize=18, verticalalignment='bottom', horizontalalignment='right',
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.5)
-    )
-
-    if show_plot:
-        plt.show()
-    # else:
-    #     plt.close(fig)
-    
-    return fig, pear_coef, kend_coef
-
-
-def plot_bar(df_pred, df_true, df_score, dataset_name, show_plot=False):
-    
-    if dataset_name=='msmarcodev':
-        pred_scale = 1
-    else:
-        pred_scale = 1
-
-    score_scale = 0.25
-    true_color = "royalblue"   # True 값 색상
-    pred_color = "limegreen"  # Pred 값 색상
-    score_color = "darkorange"  # score 값 색상
-
-    fig_list = []
-    num_q = df_pred.shape[0] - 3
-    i = 0
-    for i in range(num_q):
-        # i번째 query에 대한 true & pred 값 (각 10개)
-        true_scores = df_true.iloc[i, :10].values
-        pred_scores = df_pred.iloc[i, :10].values
-        scores = df_score.iloc[i, :10].values
-
-        # rr, ndcg 값 가져오기
-        rr_true_i = df_true['rr_true'].iloc[i]
-        dcg_true_i = df_true['dcg_true'].iloc[i]
-        ndcg_true_i = df_true['ndcg_true'].iloc[i]
-        rr_pred_i = df_pred['rr_pred'].iloc[i]
-        dcg_pred_i = df_pred['dcg_pred'].iloc[i]
-        ndcg_pred_i = df_pred['ndcg_pred'].iloc[i]
-
-        # X축 레이블 (R1 ~ R10)
-        x_labels = [f"R{j+1}" for j in range(10)]
-        x = np.arange(len(x_labels))  # X 위치
-        width = 0.3  # bar 너비
-
-        # 플롯 생성
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.bar(x - width, true_scores, width, label="True", color=true_color, alpha=0.7)
-        ax.bar(x, pred_scores * pred_scale, width, label="Pred", color=pred_color, alpha=0.7)
-        ax.bar(x + width, scores * score_scale, width, label="score", color=score_color, alpha=0.7)
-
-        # 범례에 rr, ndcg 값 추가
-        legend_text = [
-            f"True: RR={rr_true_i:.2f}, NDCG={ndcg_true_i:.2f}, DCG={dcg_true_i:.2f}",
-            f"Pred: RR={rr_pred_i:.2f}, NDCG={ndcg_pred_i:.2f}, DCG={dcg_pred_i:.2f}",
-            f"Score: Mean={scores.mean():.2f}, Std={scores.std():.2f}",
-        ]
-        ax.legend(legend_text)
-
-        # 제목 및 라벨 설정
-        if dataset_name == "msmarcodev":
-            ax.set_ylim((-1.0, 1.1))
-        else:
-            ax.set_ylim((-1.0, 3.3))
-        
-        ax.set_xlabel("Documents (R1 - R10)")
-        ax.set_ylabel("Relevance Score")
-        ax.set_title(f"Query {i+1}: True vs Predicted Relevance")
-        ax.set_xticks(x)
-        ax.set_xticklabels(x_labels)
-
-        # 그래프 출력
-        if show_plot:
-            plt.show()
-        else:
-            plt.close(fig)
-        
-        fig_list.append(fig)
-
-    return fig_list
-
-
-def generate_df(dict_embed):
-    ''' relevance '''
-    # shape : (n=50, top_k=10)
-    rel_true = dict_embed['actual_relevance'].cpu()
-    rel_pred = dict_embed['predicted_relevance'].cpu()
-    rel_pred.shape
-
-    ''' metric, (rr, dcg, idcg, ndcg, ndcg_tilde) '''
-    # shape : (n=50)
-    rr_true = dict_embed['rr_true'].cpu()
-    dcg_true = dict_embed['dcg_true'].cpu()
-    idcg_true = dict_embed['idcg_true'].cpu()
-    ndcg_true = dict_embed['ndcg_true'].cpu()
-
-    # shape : (n=50)
-    rr_pred = dict_embed['rr_pred'].cpu()
-    dcg_pred = dict_embed['dcg_pred'].cpu()
-    idcg_pred = dict_embed['idcg_pred'].cpu()
-    ndcg_pred = dict_embed['ndcg_pred'].cpu()
-
-    # shape : (n=50)
-    ndcg_tilde = dict_embed['ndcg_tilde'].cpu()
-
-    # shape : (n=50)
-    score = dict_embed['score'].cpu()
-
-
-    ''' prediction dataframe '''
-    df_pred = torch.cat((
-        rel_pred,
-        rel_pred.mean(dim=1).unsqueeze(1),
-        rel_pred.std(dim=1).unsqueeze(1),
-        rr_pred.unsqueeze(1),
-        dcg_pred.unsqueeze(1),
-        idcg_pred.unsqueeze(1),
-        ndcg_pred.unsqueeze(1),
-        ndcg_tilde.unsqueeze(1),
-        ), dim=-1)
-    df_pred = pd.DataFrame(df_pred)
-    
-    df_pred_mean = df_pred.mean().to_frame().T
-    df_pred_std = df_pred.std().to_frame().T
-    df_pred_max = df_pred.max().to_frame().T
-    df_pred = pd.concat([df_pred, df_pred_mean, df_pred_std, df_pred_max])
-
-    df_index_pred = [f"q{i+1}" for i in range(rel_true.shape[0])] + ["mean", "std", "max"]
-    df_columns_pred = [f"R{i+1}_pred" for i in range(10)] + ["R_mean_pred", "R_std_pred"] + ["rr_pred", "dcg_pred", "idcg_pred", "ndcg_pred", "ndcg_tilde"]
-
-    # 인덱스와 컬럼 이름 변경
-    df_pred.index = df_index_pred
-    df_pred.columns = df_columns_pred
-
-    ''' true dataframe '''
-    df_true = torch.cat((
-        rel_true,
-        rel_true.float().mean(dim=1).unsqueeze(1),
-        rel_true.float().std(dim=1).unsqueeze(1),
-        rr_true.unsqueeze(1),
-        dcg_true.unsqueeze(1),
-        idcg_true.unsqueeze(1),
-        ndcg_true.unsqueeze(1),
-        ), dim=-1)
-    df_true = pd.DataFrame(df_true)
-    
-    df_true_mean = df_true.mean().to_frame().T
-    df_true_std = df_true.std().to_frame().T
-    df_true_max = df_true.max().to_frame().T
-    df_true = pd.concat([df_true, df_true_mean, df_true_std, df_true_max])
-
-    df_index_true = [f"q{i+1}" for i in range(rel_true.shape[0])] + ["mean", "std", "max"]
-    df_columns_true = [f"R{i+1}_true" for i in range(10)] + ["R_mean_true", "R_std_true"]+ ["rr_true", "dcg_true", "idcg_true", "ndcg_true"]
-
-    # 인덱스와 컬럼 이름 변경
-    df_true.index = df_index_true
-    df_true.columns = df_columns_true
-
-    ''' score '''
-    df_score = torch.cat((
-        score,
-        # score.mean(dim=1).unsqueeze(1),
-        # score.std(dim=1).unsqueeze(1),
-        ), dim=-1)
-    df_score = pd.DataFrame(df_score)
-
-    df_score_mean = df_score.iloc[:, :10].values.mean()
-    df_score_std = df_score.iloc[:, :10].values.std()
-    df_score_max = df_score.iloc[:, :10].max()
-
-    df_score = (df_score - df_score_mean) / (df_score_std)
-
-    df_score = pd.concat([df_score, df_score.mean(axis=1), df_score.std(axis=1)], axis=1)
-
-    df_score_mean = df_score.mean().to_frame().T
-    df_score_std = df_score.std().to_frame().T
-    df_score_max = df_score.max().to_frame().T
-    df_score = pd.concat([df_score, df_score_mean, df_score_std, df_score_max])
-
-    df_index_score = [f"q{i+1}" for i in range(rel_true.shape[0])] + ["mean", "std", "max"]
-    # df_columns_score = [f"s{i+1}" for i in range(10)]
-    df_columns_score = [f"s{i+1}" for i in range(10)] + ["s_mean", "s_std"]
-
-    df_score.index = df_index_score
-    df_score.columns = df_columns_score
-
-    ''' df merge '''
-    df = pd.concat([df_pred, df_true, df_score], axis=1)
-    df.shape
-
-    return df, df_pred, df_true, df_score
 
 #%%
 if __name__ == '__main__':
@@ -895,107 +458,42 @@ if __name__ == '__main__':
         args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
         args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
 
-        # eval_metric_dict, ap_list, pp_list = QPP_gpt_result(args, subset=False)
-        # eval_metric_dict
-
-    ''' ndcg_check ''' 
-    # eda_gpt_4o(args, dataset_name='DL2019')
-
-    # for base_model in ['bm25', 'ance']:
-    #     args.base_model = base_model
-
-    #     if args.base_model == 'ance':
-    #         args.dataset_list = ['DL2019', 'DL2020', 'DLHard']
-    #     else:
-    #         args.dataset_list = ['msmarcodev', 'DL2019', 'DL2020', 'DLHard']
-        
-    #     for dataset_name in args.dataset_list:
-            
-    #         args.query_path = f'./datasets/TREC/{args.dataset}/queries_{args.dataset}.jsonl'
-    #         args.qrels_path = f'./datasets/TREC/{args.dataset}/qrels_{args.dataset}.jsonl'
-    #         args.run_path = f'./retrieval_results/{args.base_model}_{args.dataset}_result'
-    #         args.ap_path = f'./output/actual_performance/{args.base_model}_{args.dataset}_actual_performance.json'
-    #         args.index_path = './datasets/collections/lucene-index-msmarco-passage'
-    #         args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
-    #         args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
-            
-    #         eda_gpt_4o(args, dataset_name=dataset_name)
-
-
     ''' DL2019, DL2020, DLHard '''
-    # for split in [1]:
-    #     for base_model in ['bm25', 'ance']:
-    #         for dataset in ['DL2019', 'DL2020', 'DLHard']:
+    for split in [1, 2, 3]:
+        for base_model in ['bm25', 'ance']:
+            for dataset in ['msmarcodev', 'DL2019', 'DL2020', 'DLHard']:
                 
-    #             print(f'split: {split}, base_model: {base_model}, dataset: {dataset}')
+                print(f'split: {split}, base_model: {base_model}, dataset: {dataset}')
                 
-    #             args.base_model = base_model
-    #             args.dataset = dataset
+                args.base_model = base_model
+                args.dataset = dataset
 
-    #             args.query_path = f'./datasets/TREC/{args.dataset}/queries_{args.dataset}.jsonl'
-    #             args.qrels_path = f'./datasets/TREC/{args.dataset}/qrels_{args.dataset}.jsonl'
-    #             args.run_path = f'./retrieval_results/{args.base_model}_{args.dataset}_result'
-    #             args.ap_path = f'./output/actual_performance/{args.base_model}_{args.dataset}_actual_performance.json'
-    #             args.index_path = './datasets/collections/lucene-index-msmarco-passage'
-    #             args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
-    #             args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
+                args.query_path = f'./datasets/TREC/{args.dataset}/queries_{args.dataset}.jsonl'
+                args.qrels_path = f'./datasets/TREC/{args.dataset}/qrels_{args.dataset}.jsonl'
+                args.run_path = f'./retrieval_results/{args.base_model}_{args.dataset}_result'
+                args.ap_path = f'./output/actual_performance/{args.base_model}_{args.dataset}_actual_performance.json'
+                args.index_path = './datasets/collections/lucene-index-msmarco-passage'
+                args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
+                args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
 
-    #             result_dict = load_data(args, split=split)
-
-    # ''' msmarcodev '''
-    # args.top_k = 10
-    # for split in [1]:
-    #     for base_model in ['bm25', 'ance']:
-    #         for dataset in ['msmarcodev']:
-                
-    #             print(f'split: {split}, base_model: {base_model}, dataset: {dataset}')
-                
-    #             args.base_model = base_model
-    #             args.dataset = dataset
-
-    #             args.query_path = f'./datasets/TREC/{args.dataset}/queries_{args.dataset}.jsonl'
-    #             args.qrels_path = f'./datasets/TREC/{args.dataset}/qrels_{args.dataset}.jsonl'
-    #             args.run_path = f'./retrieval_results/{args.base_model}_{args.dataset}_result'
-    #             args.ap_path = f'./output/actual_performance/{args.base_model}_{args.dataset}_actual_performance.json'
-    #             args.index_path = './datasets/collections/lucene-index-msmarco-passage'
-    #             args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
-    #             args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
-
-    #             result_dict = load_data(args, split=split)
-    
-
-    ''' msmarcodev '''
-    args.top_k = 10
-    split = 1
-    
-    print(f'split: {split}, base_model: {args.base_model}, dataset: {args.dataset}')
-
-    args.query_path = f'./datasets/TREC/{args.dataset}/queries_{args.dataset}.jsonl'
-    args.qrels_path = f'./datasets/TREC/{args.dataset}/qrels_{args.dataset}.jsonl'
-    args.run_path = f'./retrieval_results/{args.base_model}_{args.dataset}_result'
-    args.ap_path = f'./output/actual_performance/{args.base_model}_{args.dataset}_actual_performance.json'
-    args.index_path = './datasets/collections/lucene-index-msmarco-passage'
-    args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
-    args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
-
-    result_dict = load_data(args, split=split)
+                result_dict = load_data(args, split=split)
 
     ''' get result from json file '''
-    # for base_model in ['bm25', 'ance']:
-    #     for dataset in ['DL2019', 'DL2020', 'DLHard']:
+    for base_model in ['bm25', 'ance']:
+        for dataset in ['msmarcodev', 'DL2019', 'DL2020', 'DLHard']:
             
-    #         print(f'split: 1, base_model: {base_model}, dataset: {dataset}')
+            print(f'split: 1, base_model: {base_model}, dataset: {dataset}')
             
-    #         args.base_model = base_model
-    #         args.dataset = dataset
+            args.base_model = base_model
+            args.dataset = dataset
 
-    #         args.query_path = f'./datasets/TREC/{args.dataset}/queries_{args.dataset}.jsonl'
-    #         args.qrels_path = f'./datasets/TREC/{args.dataset}/qrels_{args.dataset}.jsonl'
-    #         args.run_path = f'./retrieval_results/{args.base_model}_{args.dataset}_result'
-    #         args.ap_path = f'./output/actual_performance/{args.base_model}_{args.dataset}_actual_performance.json'
-    #         args.index_path = './datasets/collections/lucene-index-msmarco-passage'
-    #         args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
-    #         args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
+            args.query_path = f'./datasets/TREC/{args.dataset}/queries_{args.dataset}.jsonl'
+            args.qrels_path = f'./datasets/TREC/{args.dataset}/qrels_{args.dataset}.jsonl'
+            args.run_path = f'./retrieval_results/{args.base_model}_{args.dataset}_result'
+            args.ap_path = f'./output/actual_performance/{args.base_model}_{args.dataset}_actual_performance.json'
+            args.index_path = './datasets/collections/lucene-index-msmarco-passage'
+            args.checkpoint_path = f'./supervisedQPP/gpt_4o/checkpoint/'
+            args.setup = f"{args.base_model}_{args.dataset}_{args.name}"
 
-    #         eval_metric_dict, ap_list, pp_list = QPP_gpt_result(args)
-    #         print(eval_metric_dict)
+            eval_metric_dict, ap_list, pp_list = QPP_gpt_result(args)
+            print(eval_metric_dict)

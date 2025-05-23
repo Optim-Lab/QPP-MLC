@@ -1,5 +1,4 @@
 #%%
-import json
 import os
 import copy
 import time
@@ -8,7 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from scipy.stats import pearsonr, spearmanr, kendalltau
 from dataset import DatasetQPPCross, collate_fn_cross
 
